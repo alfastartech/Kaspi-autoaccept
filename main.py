@@ -6,7 +6,12 @@ from tkinter import messagebox
 token = 'Ваш токен'
 
 def get_time_range():
-    current_time_unix_ms = int(time.time() * 1000 - 7200000)
+    current_time_unix_ms = int(time.time() * 1000)
+    if time_var.get() == 1:
+        current_time_unix_ms -= 7200000
+    elif time_var.get() == 2:
+        current_time_unix_ms -= 1
+    
     time_72_hours_ago_unix_ms = current_time_unix_ms - (72 * 60 * 60 * 1000)
     return current_time_unix_ms, time_72_hours_ago_unix_ms
 
@@ -31,17 +36,18 @@ def fetch_orders():
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 YaBrowser/24.4.0.0 Safari/537.36'
     }
 
-    response = requests.get('https://kaspi.kz/shop/api/v2/orders', headers=headers, params=params)
-    if response.status_code == 200:
+    try:
+        response = requests.get('https://kaspi.kz/shop/api/v2/orders', headers=headers, params=params)
+        response.raise_for_status()
         data = response.json()
         orders = [(order['id'], order['attributes']['code']) for order in data['data']]
         return orders
-    else:
-        messagebox.showerror('Error', f'Ошибка при выполнении запроса: {response.status_code}\n{response.text}')
+    except requests.exceptions.RequestException as e:
+        messagebox.showerror('Error', f'Ошибка при выполнении запроса: {e}')
         return []
 
 def accept_order(order_id, order_code):
-    url = 'https://kaspi.kz/shop/api/v2/orders'
+    url = f'https://kaspi.kz/shop/api/v2/orders/{order_id}'
     payload = {
         "data": {
             "type": "orders",
@@ -59,11 +65,12 @@ def accept_order(order_id, order_code):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 YaBrowser/24.4.0.0 Safari/537.36'
     }
 
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code == 200:
+    try:
+        response = requests.patch(url, headers=headers, json=payload)
+        response.raise_for_status()
         messagebox.showinfo('Success', 'Заказ принят успешно!')
-    else:
-        messagebox.showerror('Error', f'Ошибка при выполнении запроса: {response.status_code}\n{response.text}')
+    except requests.exceptions.RequestException as e:
+        messagebox.showerror('Error', f'Ошибка при выполнении запроса: {e}')
 
 def auto_accept_orders():
     if auto_accept_var.get():
@@ -117,6 +124,16 @@ accept_button.pack(side=tk.LEFT, padx=5)
 auto_accept_var = tk.BooleanVar()
 auto_accept_checkbox = tk.Checkbutton(root, text='Автопринятие заказов', variable=auto_accept_var)
 auto_accept_checkbox.pack(pady=10)
+
+time_var = tk.IntVar(value=1)
+radio_frame = tk.Frame(root)
+radio_frame.pack(pady=10)
+
+radio1 = tk.Radiobutton(radio_frame, text='Заказы старше 90 минут', variable=time_var, value=1)
+radio1.pack(side=tk.LEFT, padx=5)
+
+radio2 = tk.Radiobutton(radio_frame, text='Все новые заказы', variable=time_var, value=2)
+radio2.pack(side=tk.LEFT, padx=5)
 
 refresh_orders()
 auto_accept_orders()
